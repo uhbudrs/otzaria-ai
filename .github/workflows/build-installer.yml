@@ -1,0 +1,108 @@
+name: Build Otzaria + AI Installer
+
+# סקריפט בנייה אוטומטי שמייצר את ה-installer הסופי.
+# מופעל ע"י push לגירסת tag (v*) או ידנית מ-GitHub UI.
+#
+# הפלט: artifact בשם `otzaria-with-ai-installer` שמכיל את ה-.exe
+# המוכן להורדה ע"י המשתמשים.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'AI profile (low/standard/high)'
+        required: true
+        default: 'standard'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout otzaria-ai
+        uses: actions/checkout@v4
+        with:
+          path: otzaria-ai
+
+      - name: Checkout otzaria
+        uses: actions/checkout@v4
+        with:
+          repository: Otzaria/otzaria
+          path: otzaria
+
+      - name: Apply AI integration patch
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force otzaria-ai/integration/lib/* otzaria/lib/
+          # patches בתיקיית integration/patches/ מוחלים אם יש
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y
+
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: pip-${{ runner.os }}-${{ hashFiles('otzaria-ai/dicta_service/requirements.txt') }}
+
+      - name: Install Python dependencies
+        shell: pwsh
+        working-directory: otzaria-ai
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r dicta_service\requirements.txt
+          pip install pyinstaller==6.10.0
+
+      - name: Build AI sidecar
+        shell: pwsh
+        working-directory: otzaria-ai
+        run: |
+          python -m PyInstaller build_pipeline\otzaria-ai.spec --noconfirm --clean --distpath dist --workpath build
+          if (-not (Test-Path "dist\otzaria-ai\otzaria-ai.exe")) {
+            Write-Error "sidecar build failed"
+            exit 1
+          }
+
+      - name: Build Flutter Windows release
+        shell: pwsh
+        working-directory: otzaria
+        run: |
+          flutter pub get
+          flutter build windows --release
+
+      - name: Run Inno Setup
+        shell: pwsh
+        working-directory: otzaria-ai\build_pipeline
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" otzaria-with-ai.iss
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otzaria-with-ai-installer
+          path: otzaria-ai/dist/otzaria-*-windows-with-ai.exe
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: otzaria-ai/dist/otzaria-*-windows-with-ai.exe
+          generate_release_notes: true

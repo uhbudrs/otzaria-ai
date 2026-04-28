@@ -1,0 +1,20 @@
+# דרישות Python - התקנה ע"י: pip install -r requirements.txt
+# גרסת Python: 3.10 / 3.11 / 3.12 (לא 3.13/3.14 - אין עדיין wheels של torch).
+#
+# התקנת torch CPU בלבד (חוסך 2GB של CUDA):
+#   pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cpu
+# ואחר כך:
+#   pip install -r requirements.txt
+fastapi>=0.115,<0.120
+uvicorn[standard]>=0.30,<0.35
+pydantic>=2.9,<3.0
+transformers>=4.45,<4.50
+tokenizers>=0.20,<0.22
+sentencepiece>=0.2,<0.3
+numpy>=1.26,<2.2
+onnxruntime>=1.19,<1.21
+huggingface_hub>=0.25,<0.30
+requests>=2.32,<3.0
+python-multipart>=0.0.10
+# torch מותקן בנפרד עם index URL של CPU (ראה הוראה למעלה)
+torch>=2.2,<2.6
