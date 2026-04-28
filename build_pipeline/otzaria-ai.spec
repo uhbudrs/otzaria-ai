@@ -139,7 +139,8 @@ a = Analysis(
     runtime_hooks=[],
     excludes=EXCLUDES,
     noarchive=False,
-    optimize=2,
+    # optimize=0 חובה - numpy.add_docstring נופל אם docstrings מוסרים
+    optimize=0,
 )
 
 pyz = PYZ(a.pure)
