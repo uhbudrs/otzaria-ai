@@ -177,15 +177,28 @@ if ($searchContent -notlike "*AI-expanded regexTerms*") {
     # מנסה גם אם הקובץ באמת עם '
     $regularSearchBlockSingleQ = "    final List<String> regexTerms = params['regexTerms'] as List<String>;`r`n    final int effectiveSlop = params['effectiveSlop'] as int;`r`n    final int maxExpansions = params['maxExpansions'] as int;"
 
-    # נסה גם " וגם ' לבלוק המקורי
+    # החלפה ראשונה בלבד! יש 2 מתודות חיפוש בקובץ V2, רק אחת מהן (הראשונה)
+    # מגדירה hasAlternativeWords. נשתמש ב-IndexOf + Substring.
+    $matchedBlock = $null
     if ($searchContent.Contains($regularSearchBlockSingleQ)) {
-        $searchContent = $searchContent.Replace($regularSearchBlockSingleQ, $regularSearchReplace)
-        Write-Host "→ search_repository.dart עם הרחבת AI (single quotes)" -ForegroundColor Green
+        $matchedBlock = $regularSearchBlockSingleQ
+        Write-Host "→ search_repository.dart - matched single-quote block" -ForegroundColor Cyan
     } elseif ($searchContent.Contains($regularSearchBlock)) {
-        $searchContent = $searchContent.Replace($regularSearchBlock, $regularSearchReplace)
-        Write-Host "→ search_repository.dart עם הרחבת AI (double quotes)" -ForegroundColor Green
+        $matchedBlock = $regularSearchBlock
+        Write-Host "→ search_repository.dart - matched double-quote block" -ForegroundColor Cyan
     } else {
-        Write-Host "  ⚠ לא נמצא ה-block של regexTerms הראשון" -ForegroundColor Yellow
+        Write-Host "  ⚠ לא נמצא ה-block של regexTerms" -ForegroundColor Yellow
+    }
+
+    if ($matchedBlock) {
+        # החלף רק את המופע הראשון
+        $idx = $searchContent.IndexOf($matchedBlock)
+        if ($idx -ge 0) {
+            $before = $searchContent.Substring(0, $idx)
+            $after  = $searchContent.Substring($idx + $matchedBlock.Length)
+            $searchContent = $before + $regularSearchReplace + $after
+            Write-Host "→ search_repository.dart עם הרחבת AI (פעם אחת בלבד)" -ForegroundColor Green
+        }
     }
 
     [System.IO.File]::WriteAllText($searchDart, $searchContent, [System.Text.UTF8Encoding]::new($false))
