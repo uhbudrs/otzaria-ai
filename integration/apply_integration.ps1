@@ -147,22 +147,29 @@ Replace-Once -FilePath $searchDart `
     -Replace "import 'package:flutter/foundation.dart';`r`nimport 'package:otzaria/ai/ai_provider.dart';`r`nimport 'package:otzaria/ai/smart_query_expander.dart';" `
     -Marker "ai/ai_provider.dart"
 
-# 4b. regexTerms ל-mutable
-Replace-Once -FilePath $searchDart `
-    -Find "final List<String> regexTerms = params['regexTerms'] as List<String>;" `
-    -Replace "List<String> regexTerms = params['regexTerms'] as List<String>;" `
-    -Marker "List<String> regexTerms = params"
-
-# 4c. הוספת בלוק הרחבה ב-AI אחרי שורת maxExpansions
+# 4b + 4c: שני שינויים בו זמנית - mutable + בלוק AI
+# מאחדים כדי לוודא שאין דילוג בגלל marker
 $content = Get-Content $searchDart -Raw -Encoding UTF8
 $expansionMarker = "AI-expanded regexTerms"
 if ($content -notlike "*$expansionMarker*") {
+    # שלב א': הסרת final
+    $finalFind = "final List<String> regexTerms = params['regexTerms'] as List<String>;"
+    $finalReplace = "List<String> regexTerms = params['regexTerms'] as List<String>;"
+    if ($content.Contains($finalFind)) {
+        $content = $content.Replace($finalFind, $finalReplace)
+        Write-Host "  ✓ regexTerms הפך ל-mutable" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ לא נמצא 'final List<String> regexTerms'" -ForegroundColor Yellow
+    }
+
+    # שלב ב': הוספת בלוק הרחבה. השתמשנו ב-here-string single-quoted (@'...'@)
+    # כדי ש-PowerShell לא יבצע interpolation על $regexTerms ו-$e בתוך הקוד Dart.
     $findBlock = "    final int maxExpansions = params['maxExpansions'] as int;"
-    $replaceBlock = @"
+    $replaceBlock = @'
     final int maxExpansions = params['maxExpansions'] as int;
 
-    // אם שירות ה-AI זמין - מרחיבים את השאילתה לפי שורש (lemma)
-    // כדי שחיפוש 'הלך' ימצא גם 'הולך', 'ילך', 'הליכה' וכו' אוטומטית.
+    // הרחבת שאילתה אוטומטית לפי שורש (lemma) דרך AI sidecar.
+    // חיפוש "הלך" ימצא גם "הולך", "ילך", "הליכה" וכו'.
     // בכישלון - חיפוש רגיל בלי AI.
     if (AiProvider.instance.isReady && !fuzzy && !hasAlternativeWords) {
       try {
@@ -170,18 +177,23 @@ if ($content -notlike "*$expansionMarker*") {
         final expanded = await expander.expand(query);
         if (expanded.regexTerms.isNotEmpty) {
           regexTerms = expanded.regexTerms;
-          debugPrint('🤖 AI-expanded regexTerms: \$regexTerms');
+          debugPrint('AI-expanded regexTerms: $regexTerms');
         }
       } catch (e) {
-        debugPrint('🤖 AI expansion failed (using basic search): \$e');
+        debugPrint('AI expansion failed (using basic search): $e');
       }
     }
-"@
+'@
     if ($content.Contains($findBlock)) {
         $content = $content.Replace($findBlock, $replaceBlock)
-        [System.IO.File]::WriteAllText($searchDart, $content, [System.Text.UTF8Encoding]::new($false))
         Write-Host "  ✓ הוספתי בלוק הרחבת AI" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ לא נמצאה השורה לאחריה להוסיף את בלוק ה-AI" -ForegroundColor Yellow
     }
+
+    [System.IO.File]::WriteAllText($searchDart, $content, [System.Text.UTF8Encoding]::new($false))
+} else {
+    Write-Host "  • search_repository.dart כבר עם AI" -ForegroundColor DarkGray
 }
 
 Write-Host ""
