@@ -4,19 +4,24 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
 var/
 wheels/
 *.egg-info/
+
+# build/ זה גם של PyInstaller וגם של Flutter - לא רוצים את ה-PyInstaller workdir
+# אבל פלטר build/ של flutter כבר לא רלוונטי כי אנחנו לא בתיקיית otzaria עצמה
+/build/
+/dicta_service/build/
+
+# שימו לב: אסור להוסיף `lib/` סתם - integration/lib/ עם קוד Dart חייב להיות ב-git
 .installed.cfg
 *.egg
 MANIFEST
