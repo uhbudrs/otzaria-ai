@@ -1,71 +1,139 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec ל-sidecar.
+"""PyInstaller spec ל-sidecar - גרסה ממוטבת.
 
-הספק הזה מוקפד יותר מ-CLI של PyInstaller:
-- כולל את הקבצים של trust_remote_code (קבצי .py של dicta-il)
-- מוציא חבילות שלא צריך (CUDA, sympy, scipy.io, וכו') - חוסך 600MB
-- bundles את הכל בתיקייה (`onedir`) - אנטי-וירוס לא חוסם זה
-- שם הפלט: dist/otzaria-ai/otzaria-ai.exe
+המוטיבציה: collect_all('transformers') מעתיק 1.5GB+ של קבצים מיותרים.
+פותר ע"י:
+  - collect_data רק לקבצי tokenizer/model templates של transformers
+  - hidden imports סלקטיביים (רק מה ש-DictaBERT צריך)
+  - excludes אגרסיביים: tensorflow, jax, flax, sklearn וכו'
+  - onedir במקום onefile - מהיר פי 3-5 ולא נחסם ע"י Defender
 
-הרצה:
-    pyinstaller otzaria-ai.spec --noconfirm --clean
+הזמן הצפוי בריצה: 4-6 דק' במקום 20.
 """
 from PyInstaller.utils.hooks import (
-    collect_all,
     collect_data_files,
+    collect_dynamic_libs,
     collect_submodules,
 )
 
-# transformers + tokenizers - חובה כל הקבצים, יש המון
-tr_d, tr_b, tr_h = collect_all("transformers")
-tk_d, tk_b, tk_h = collect_all("tokenizers")
-hf_d, hf_b, hf_h = collect_all("huggingface_hub")
-# torch CPU - לא הכל, רק את הליבה
-to_d = collect_data_files("torch", excludes=["**/test/**", "**/_export/**"])
+# transformers - רק קבצי data חיוניים, בלי כל ה-modeling files של מאות מודלים
+tr_data = collect_data_files(
+    "transformers",
+    excludes=[
+        "**/*.md",
+        "**/test/**",
+        "**/tests/**",
+        "**/onnx/**",
+        "**/utils/dummy_*",  # placeholder modules
+    ],
+)
 
-# חבילות שלא נדרשות - לחסוך נפח
+# tokenizers - חבילה קטנה, צריכים את ה-Rust binaries
+tk_bins = collect_dynamic_libs("tokenizers")
+tk_data = collect_data_files("tokenizers")
+
+# huggingface_hub
+hf_data = collect_data_files("huggingface_hub")
+
+# torch - DLLs חיוניים בלבד
+torch_bins = collect_dynamic_libs("torch")
+torch_data = collect_data_files(
+    "torch",
+    excludes=[
+        "**/test/**",
+        "**/tests/**",
+        "**/_export/**",
+        "**/distributions/**",
+        "**/onnx/**",
+        "**/_torch_docs.py",
+        "**/profiler/**",
+    ],
+)
+
+# חבילות שלא נדרשות
 EXCLUDES = [
-    "matplotlib",
-    "PIL",
-    "PyQt5", "PyQt6",
-    "tkinter",
-    "IPython",
-    "jupyter",
-    "notebook",
-    "pandas",
-    "scipy",
-    "sklearn",
-    "torch.distributed",
-    "torch.utils.tensorboard",
-    "tensorboard",
-    "torchvision",
-    "torchaudio",
-    "cv2",
+    # ML frameworks אחרים
+    "tensorflow", "tensorflow_cpu", "tensorflow_gpu",
+    "jax", "jaxlib", "flax",
+    "sklearn", "scikit-learn",
+    "pandas", "scipy",
+    # GPU support
+    "torch.cuda", "torch.distributed.fsdp",
+    "torch.distributions",
+    "torchvision", "torchaudio",
+    # UI
+    "matplotlib", "PIL", "PyQt5", "PyQt6", "PySide2", "PySide6",
+    "tkinter", "_tkinter",
+    # Notebooks
+    "IPython", "jupyter", "notebook", "jupyterlab",
+    # Vision
+    "cv2", "opencv-python",
+    # Less-used transformers tasks
+    "transformers.models.musicgen",
+    "transformers.models.wav2vec2",
+    "transformers.models.whisper",
+    "transformers.models.speech_to_text",
+    "transformers.models.clap",
+    "transformers.models.clip",
+    "transformers.models.blip",
+    "transformers.models.vit",
+    "transformers.models.detr",
+    "transformers.models.t5",
+    "transformers.models.bart",
+    "transformers.models.gpt2",
+    "transformers.models.llama",
+    "transformers.models.mistral",
+    # Tests
+    "pytest", "unittest",
 ]
+
+# רק ה-models של transformers שאנחנו צריכים בפועל
+HIDDEN_IMPORTS = [
+    # uvicorn internals
+    "uvicorn.logging",
+    "uvicorn.loops",
+    "uvicorn.loops.auto",
+    "uvicorn.loops.asyncio",
+    "uvicorn.protocols",
+    "uvicorn.protocols.http",
+    "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.http.h11_impl",
+    "uvicorn.protocols.websockets",
+    "uvicorn.protocols.websockets.auto",
+    "uvicorn.lifespan",
+    "uvicorn.lifespan.on",
+    "uvicorn.lifespan.off",
+    "uvicorn.middleware",
+    "uvicorn.middleware.proxy_headers",
+    # anyio backends
+    "anyio._backends._asyncio",
+    # transformers - רק BERT (מה ש-DictaBERT משתמש)
+    "transformers.models.bert",
+    "transformers.models.bert.modeling_bert",
+    "transformers.models.bert.tokenization_bert",
+    "transformers.models.bert.tokenization_bert_fast",
+    "transformers.models.bert.configuration_bert",
+    "transformers.models.auto",
+    "transformers.models.auto.modeling_auto",
+    "transformers.models.auto.tokenization_auto",
+    "transformers.models.auto.configuration_auto",
+    # Common transformer utils
+    "transformers.modeling_utils",
+    "transformers.tokenization_utils",
+    "transformers.tokenization_utils_base",
+    "transformers.tokenization_utils_fast",
+    "transformers.configuration_utils",
+    "transformers.feature_extraction_utils",
+    # שלנו
+] + collect_submodules("dicta_service")
+
 
 a = Analysis(
     ["..\\dicta_service\\main.py"],
     pathex=[".."],
-    binaries=tr_b + tk_b + hf_b,
-    datas=tr_d + tk_d + hf_d + to_d,
-    hiddenimports=[
-        "uvicorn.logging",
-        "uvicorn.loops",
-        "uvicorn.loops.auto",
-        "uvicorn.loops.asyncio",
-        "uvicorn.protocols",
-        "uvicorn.protocols.http",
-        "uvicorn.protocols.http.auto",
-        "uvicorn.protocols.http.h11_impl",
-        "uvicorn.protocols.websockets",
-        "uvicorn.protocols.websockets.auto",
-        "uvicorn.lifespan",
-        "uvicorn.lifespan.on",
-        "uvicorn.lifespan.off",
-        "uvicorn.middleware",
-        "uvicorn.middleware.proxy_headers",
-        "anyio._backends._asyncio",
-    ] + collect_submodules("dicta_service"),
+    binaries=tk_bins + torch_bins,
+    datas=tr_data + tk_data + hf_data + torch_data,
+    hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -85,8 +153,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=False,  # UPX לפעמים מתעמת עם Defender
-    console=False,  # רץ ברקע, אין שורת פקודה לוצצת
+    upx=False,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
