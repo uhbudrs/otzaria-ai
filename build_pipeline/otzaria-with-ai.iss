@@ -13,7 +13,7 @@
 ;   3. (אופציונלי) מודלים מועתקים ל-..\dist\models\
 
 #define MyAppName "אוצריא"
-#define MyAppVersion "0.9.71-ai"
+#define MyAppVersion "0.9.90-ai"
 #define MyAppPublisher "Otzaria + Dicta AI"
 #define MyAppURL "https://github.com/Otzaria/otzaria"
 #define MyAppExeName "otzaria.exe"

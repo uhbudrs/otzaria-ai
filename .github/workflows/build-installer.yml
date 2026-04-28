@@ -32,6 +32,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Otzaria/otzaria
+          ref: migrationDB_V2  # branch פעיל - 0.9.90, SQLite, plugin system
           path: otzaria
 
       - name: Apply AI integration patch
@@ -41,20 +42,36 @@ jobs:
           $otzariaPath = Resolve-Path "..\otzaria"
           .\integration\apply_integration.ps1 -OtzariaPath $otzariaPath.Path
 
-      - name: Fix Otzaria pubspec dependency conflicts
+      - name: Fix Otzaria pubspec dependency conflicts (only if needed)
         shell: pwsh
         working-directory: otzaria
         run: |
-          # אוצריא pinned ל-isar 4.0.0-dev שדורש analyzer<7, אבל Flutter החדש דורש analyzer>=8
-          # ו-test 1.25 לא תואם ל-flutter_test
+          # ב-migrationDB_V2 כבר יש fix-עצמי ל-analyzer/matcher.
+          # ב-main (0.9.71) ישנים נדרש patch ידני. אנחנו בודקים בעדינות.
           $pubspec = Get-Content "pubspec.yaml" -Raw -Encoding UTF8
-          if ($pubspec -match "^\s*test:\s*\^1\.25") {
-            $pubspec = $pubspec -replace "^(\s*)test:\s*\^1\.25\.\d+", "# `$&  # disabled by AI build (incompat with isar)"
+          $changed = $false
+
+          # פתרון רק אם test pinned לגרסה ישנה שלא תואמת
+          if ($pubspec -match "^\s*test:\s*\^1\.2[0-9]") {
+            $pubspec = $pubspec -replace "^(\s*)test:\s*\^1\.2[0-9]\.\d+", "# `$&  # disabled by AI build"
+            $changed = $true
+            Write-Host "  patched test version pin"
           }
-          if ($pubspec -notmatch "analyzer:\s*\^8") {
-            $pubspec = $pubspec -replace "(dependency_overrides:[^\n]*\n(?:[^\n]*\n)*?\s*intl:[^\n]*)", "`$1`n  analyzer: ^8.0.0`n  test_api: ^0.7.10"
+
+          # מוסיפים overrides רק אם חסרים לגמרי
+          if ($pubspec -notmatch "analyzer:\s*(any|\^[78])") {
+            if ($pubspec -match "dependency_overrides:") {
+              $pubspec = $pubspec -replace "(dependency_overrides:\s*\r?\n)", "`$1  analyzer: any`n  test_api: ^0.7.10`n"
+              $changed = $true
+              Write-Host "  added analyzer/test_api overrides"
+            }
           }
-          Set-Content -Path "pubspec.yaml" -Value $pubspec -Encoding UTF8 -NoNewline
+
+          if ($changed) {
+            Set-Content -Path "pubspec.yaml" -Value $pubspec -Encoding UTF8 -NoNewline
+          } else {
+            Write-Host "  no fix needed (V2 has its own overrides)"
+          }
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5

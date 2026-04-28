@@ -1,10 +1,9 @@
-# החלת אינטגרציית AI על מקור אוצריא.
-# הסקריפט עושה את כל השינויים הדרושים כדי שאוצריא תעבוד עם sidecar ה-AI.
+# החלת אינטגרציית AI על מקור אוצריא (migrationDB_V2 / 0.9.90+).
 #
-# הרצה:
-#   .\apply_integration.ps1 -OtzariaPath C:\path\to\otzaria
-#
-# ברירת מחדל: ..\..\otzaria
+# שינויים בענף החדש:
+#   - more_screen.dart הוחלף ב-tools/tools_screen.dart עם ToolDescriptor registry
+#   - main.dart: initialize() → _runAppBootstrap()
+#   - search_repository.dart דומה אבל עם 2 instances של regexTerms
 
 [CmdletBinding()]
 param(
@@ -14,163 +13,154 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 
-if (-not (Test-Path $OtzariaPath)) {
-    Write-Error "תיקיית otzaria לא נמצאה ב: $OtzariaPath"
-    exit 1
-}
 if (-not (Test-Path "$OtzariaPath\lib\main.dart")) {
     Write-Error "$OtzariaPath לא נראה כמו תיקיית otzaria"
     exit 1
 }
 
 Write-Host "החלת אינטגרציית AI על: $OtzariaPath" -ForegroundColor Cyan
-Write-Host ""
 
 # ────────────────────────────────────────────────────────────────────
-# שלב 1: העתקת lib/ai/ לתוך otzaria
+# שלב 1: העתקת lib/ai/
 # ────────────────────────────────────────────────────────────────────
-Write-Host "→ מעתיק תיקיית lib/ai/..." -ForegroundColor White
 $source = "$Root\lib\ai"
 $target = "$OtzariaPath\lib\ai"
 if (Test-Path $target) { Remove-Item -Recurse -Force $target }
 Copy-Item -Recurse $source $target
 $count = (Get-ChildItem $target -Recurse -File).Count
-Write-Host "  ✓ הועתקו $count קבצים" -ForegroundColor Green
+Write-Host "→ הועתקו $count קבצי AI ל-lib/ai/" -ForegroundColor Green
 
 # ────────────────────────────────────────────────────────────────────
-# פונקציה לעדכון קובץ עם בדיקה שהשינוי לא הוחל כפול
+# שלב 2: main.dart - import + הפעלה ב-bootstrap
 # ────────────────────────────────────────────────────────────────────
-function Replace-Once {
-    param([string]$FilePath, [string]$Find, [string]$Replace, [string]$Marker)
-    if (-not (Test-Path $FilePath)) {
-        Write-Host "  ⚠ לא קיים: $FilePath" -ForegroundColor Yellow
-        return
-    }
-    $content = Get-Content $FilePath -Raw -Encoding UTF8
-    if ($content -like "*$Marker*") {
-        Write-Host "  • כבר מותחל: $((Split-Path $FilePath -Leaf))" -ForegroundColor DarkGray
-        return
-    }
-    if (-not $content.Contains($Find)) {
-        Write-Host "  ⚠ לא נמצא הטקסט במקור: $((Split-Path $FilePath -Leaf))" -ForegroundColor Yellow
-        Write-Host "    מחפש: $($Find.Substring(0, [Math]::Min(80, $Find.Length)))..." -ForegroundColor DarkYellow
-        return
-    }
-    $newContent = $content.Replace($Find, $Replace)
-    [System.IO.File]::WriteAllText($FilePath, $newContent, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "  ✓ $((Split-Path $FilePath -Leaf))" -ForegroundColor Green
-}
-
-# ────────────────────────────────────────────────────────────────────
-# שלב 2: פאצ' main.dart
-# ────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "→ מעדכן main.dart..." -ForegroundColor White
 $mainDart = "$OtzariaPath\lib\main.dart"
+$mainContent = Get-Content $mainDart -Raw -Encoding UTF8
 
-Replace-Once -FilePath $mainDart `
-    -Find "import 'package:otzaria/settings/backup_service.dart';" `
-    -Replace "import 'package:otzaria/settings/backup_service.dart';`r`nimport 'package:otzaria/ai/ai_provider.dart';" `
-    -Marker "ai/ai_provider.dart"
-
-Replace-Once -FilePath $mainDart `
-    -Find "  await initialize();" `
-    -Replace "  await initialize();`r`n`r`n  // הפעלת AI sidecar ברקע - לא חוסם את עליית האפליקציה`r`n  unawaited(AiProvider.instance.initialize());" `
-    -Marker "AiProvider.instance.initialize"
-
-# ────────────────────────────────────────────────────────────────────
-# שלב 3: פאצ' more_screen.dart - תפריט "כלי AI"
-# ────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "→ מעדכן more_screen.dart..." -ForegroundColor White
-$moreDart = "$OtzariaPath\lib\navigation\more_screen.dart"
-
-# 3a. import
-Replace-Once -FilePath $moreDart `
-    -Find "import 'package:otzaria/settings/settings_repository.dart';" `
-    -Replace "import 'package:otzaria/settings/settings_repository.dart';`r`nimport 'package:otzaria/ai/views/ai_main_screen.dart';" `
-    -Marker "ai/views/ai_main_screen.dart"
-
-# 3b. הוספת AiMainScreen לשני ה-PageView (small + wide)
-$content = Get-Content $moreDart -Raw -Encoding UTF8
-if ($content -notmatch "const AiMainScreen\(\)") {
-    # PageView ראשון (BottomNavigationBar - small screen)
-    $smallPattern = "                      GematriaSearchScreen(key: _gematriaKey),`r`n                    ],"
-    $smallReplace = "                      GematriaSearchScreen(key: _gematriaKey),`r`n                      const AiMainScreen(),`r`n                    ],"
-    if ($content.Contains($smallPattern)) {
-        $content = $content.Replace($smallPattern, $smallReplace)
-    }
-    # PageView שני (NavigationRail - wide screen)
-    $widePattern = "                    GematriaSearchScreen(key: _gematriaKey),`r`n                  ],"
-    $wideReplace = "                    GematriaSearchScreen(key: _gematriaKey),`r`n                    const AiMainScreen(),`r`n                  ],"
-    if ($content.Contains($widePattern)) {
-        $content = $content.Replace($widePattern, $wideReplace)
+if ($mainContent -notlike "*ai/ai_provider.dart*") {
+    # מוסיפים import אחרי import של find_ref_repository (קיים ב-V2)
+    $importAnchor = "import 'package:otzaria/find_ref/find_ref_repository.dart';"
+    if ($mainContent.Contains($importAnchor)) {
+        $mainContent = $mainContent.Replace(
+            $importAnchor,
+            "$importAnchor`r`nimport 'package:otzaria/ai/ai_provider.dart';"
+        )
+    } else {
+        Write-Host "  ⚠ לא נמצא anchor להוספת import ב-main.dart" -ForegroundColor Yellow
     }
 
-    # הוספת destination ל-NavigationRail
-    $railPattern = "                  NavigationRailDestination(`r`n                    icon: Icon(FluentIcons.calculator_24_regular),`r`n                    label: Text('גימטריות'),`r`n                  ),`r`n                ],"
-    $railReplace = "                  NavigationRailDestination(`r`n                    icon: Icon(FluentIcons.calculator_24_regular),`r`n                    label: Text('גימטריות'),`r`n                  ),`r`n                  NavigationRailDestination(`r`n                    icon: Icon(Icons.auto_awesome),`r`n                    label: Text('כלי AI'),`r`n                  ),`r`n                ],"
-    if ($content.Contains($railPattern)) {
-        $content = $content.Replace($railPattern, $railReplace)
+    # מוסיפים את ה-AI initialize אחרי _runAppBootstrap בתוך main()
+    $bootAnchor = "  await _runAppBootstrap();"
+    if ($mainContent.Contains($bootAnchor)) {
+        $mainContent = $mainContent.Replace(
+            $bootAnchor,
+            "$bootAnchor`r`n`r`n  // הפעלת AI sidecar ברקע - לא חוסם את עליית האפליקציה`r`n  unawaited(AiProvider.instance.initialize());"
+        )
+    } else {
+        Write-Host "  ⚠ לא נמצא '_runAppBootstrap' ב-main.dart" -ForegroundColor Yellow
     }
 
-    # הוספת BottomNavigationBarItem
-    $bottomPattern = "                BottomNavigationBarItem(`r`n                  icon: Icon(FluentIcons.calculator_24_regular, size: 20),`r`n                  label: 'גימטריה',`r`n                ),`r`n              ],"
-    $bottomReplace = "                BottomNavigationBarItem(`r`n                  icon: Icon(FluentIcons.calculator_24_regular, size: 20),`r`n                  label: 'גימטריה',`r`n                ),`r`n                BottomNavigationBarItem(`r`n                  icon: Icon(Icons.auto_awesome, size: 20),`r`n                  label: 'AI',`r`n                ),`r`n              ],"
-    if ($content.Contains($bottomPattern)) {
-        $content = $content.Replace($bottomPattern, $bottomReplace)
-    }
-
-    # _getTitle - הוספת case 5
-    $titlePattern = "      case 4:`r`n        return 'גימטריה';`r`n      default:"
-    $titleReplace = "      case 4:`r`n        return 'גימטריה';`r`n      case 5:`r`n        return 'כלי AI';`r`n      default:"
-    if ($content.Contains($titlePattern)) {
-        $content = $content.Replace($titlePattern, $titleReplace)
-    }
-
-    [System.IO.File]::WriteAllText($moreDart, $content, [System.Text.UTF8Encoding]::new($false))
-    Write-Host "  ✓ הוספתי כל ה-AI hooks ל-more_screen.dart" -ForegroundColor Green
+    [System.IO.File]::WriteAllText($mainDart, $mainContent, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "→ main.dart עודכן" -ForegroundColor Green
 } else {
-    Write-Host "  • more_screen.dart כבר עם AI" -ForegroundColor DarkGray
+    Write-Host "→ main.dart כבר עם AI" -ForegroundColor DarkGray
 }
 
 # ────────────────────────────────────────────────────────────────────
-# שלב 4: פאצ' search_repository.dart - הרחבת שאילתה
+# שלב 3: tools_screen.dart - הוספת BuiltInToolDescriptor חדש
 # ────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "→ מעדכן search_repository.dart..." -ForegroundColor White
-$searchDart = "$OtzariaPath\lib\search\search_repository.dart"
+$toolsDart = "$OtzariaPath\lib\tools\tools_screen.dart"
+if (-not (Test-Path $toolsDart)) {
+    Write-Error "tools_screen.dart לא נמצא - אולי ענף שגוי?"
+    exit 1
+}
 
-# 4a. imports
-Replace-Once -FilePath $searchDart `
-    -Find "import 'package:flutter/foundation.dart';" `
-    -Replace "import 'package:flutter/foundation.dart';`r`nimport 'package:otzaria/ai/ai_provider.dart';`r`nimport 'package:otzaria/ai/smart_query_expander.dart';" `
-    -Marker "ai/ai_provider.dart"
+$toolsContent = Get-Content $toolsDart -Raw -Encoding UTF8
 
-# 4b + 4c: שני שינויים בו זמנית - mutable + בלוק AI
-# מאחדים כדי לוודא שאין דילוג בגלל marker
-$content = Get-Content $searchDart -Raw -Encoding UTF8
-$expansionMarker = "AI-expanded regexTerms"
-if ($content -notlike "*$expansionMarker*") {
-    # שלב א': הסרת final
-    $finalFind = "final List<String> regexTerms = params['regexTerms'] as List<String>;"
-    $finalReplace = "List<String> regexTerms = params['regexTerms'] as List<String>;"
-    if ($content.Contains($finalFind)) {
-        $content = $content.Replace($finalFind, $finalReplace)
-        Write-Host "  ✓ regexTerms הפך ל-mutable" -ForegroundColor Green
-    } else {
-        Write-Host "  ⚠ לא נמצא 'final List<String> regexTerms'" -ForegroundColor Yellow
+if ($toolsContent -notlike "*builtin.ai_tools*") {
+    # הוספת import של AiMainScreen
+    $toolsImportAnchor = "import 'package:otzaria/tools/calendar/calendar_screen.dart';"
+    if ($toolsContent.Contains($toolsImportAnchor)) {
+        $toolsContent = $toolsContent.Replace(
+            $toolsImportAnchor,
+            "$toolsImportAnchor`r`nimport 'package:otzaria/ai/views/ai_main_screen.dart';"
+        )
     }
 
-    # שלב ב': הוספת בלוק הרחבה. השתמשנו ב-here-string single-quoted (@'...'@)
-    # כדי ש-PowerShell לא יבצע interpolation על $regexTerms ו-$e בתוך הקוד Dart.
-    $findBlock = "    final int maxExpansions = params['maxExpansions'] as int;"
-    $replaceBlock = @'
+    # הוספת BuiltInToolDescriptor אחרי acronyms_dictionary (האחרון, order 70)
+    # הסגירה היא ' );\r\n    ];' - מצרפים ערך נוסף לפניה
+    $listEndPattern = @'
+        toolId: 'builtin.acronyms_dictionary',
+        label: 'ראשי תיבות',
+        icon: FluentIcons.text_quote_24_regular,
+        iconFilled: FluentIcons.text_quote_24_filled,
+        order: 70,
+        pageBuilder: () => const AcronymsDictionaryScreen(),
+      ),
+    ];
+'@
+    $listEndReplace = @'
+        toolId: 'builtin.acronyms_dictionary',
+        label: 'ראשי תיבות',
+        icon: FluentIcons.text_quote_24_regular,
+        iconFilled: FluentIcons.text_quote_24_filled,
+        order: 70,
+        pageBuilder: () => const AcronymsDictionaryScreen(),
+      ),
+      BuiltInToolDescriptor(
+        toolId: 'builtin.ai_tools',
+        label: 'כלי AI',
+        icon: FluentIcons.bot_24_regular,
+        iconFilled: FluentIcons.bot_24_filled,
+        order: 80,
+        pageBuilder: () => const AiMainScreen(),
+      ),
+    ];
+'@
+
+    if ($toolsContent.Contains($listEndPattern)) {
+        $toolsContent = $toolsContent.Replace($listEndPattern, $listEndReplace)
+        [System.IO.File]::WriteAllText($toolsDart, $toolsContent, [System.Text.UTF8Encoding]::new($false))
+        Write-Host "→ tools_screen.dart - נוסף descriptor של AI" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠ לא נמצא end-of-list pattern ב-tools_screen.dart" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "→ tools_screen.dart כבר עם AI" -ForegroundColor DarkGray
+}
+
+# ────────────────────────────────────────────────────────────────────
+# שלב 4: search_repository.dart - הרחבת שאילתה
+# יש 2 instances של regexTerms ב-V2 - מטפלים רק בראשון (regular search)
+# ────────────────────────────────────────────────────────────────────
+$searchDart = "$OtzariaPath\lib\search\search_repository.dart"
+$searchContent = Get-Content $searchDart -Raw -Encoding UTF8
+
+if ($searchContent -notlike "*AI-expanded regexTerms*") {
+    # 4a. imports
+    $searchImportAnchor = "import 'package:flutter/foundation.dart';"
+    if ($searchContent.Contains($searchImportAnchor)) {
+        $searchContent = $searchContent.Replace(
+            $searchImportAnchor,
+            "$searchImportAnchor`r`nimport 'package:otzaria/ai/ai_provider.dart';`r`nimport 'package:otzaria/ai/smart_query_expander.dart';"
+        )
+    }
+
+    # 4b. הסרת final מ-regexTerms הראשון בלבד
+    # נשתמש ב-Regex עם match-once: -replace עם count parameter לא קיים ב-PowerShell,
+    # אבל .Replace() של string מחליף הכל. נקרא להסרה מאת הראשון.
+    # פתרון: מוסיפים marker לבלוק שאנחנו עורכים, ומחליפים בהקשר ספציפי.
+    $regularSearchBlock = @"
+    final List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
+    final int maxExpansions = params['maxExpansions'] as int;
+"@
+    $regularSearchReplace = @'
+    List<String> regexTerms = params['regexTerms'] as List<String>;
+    final int effectiveSlop = params['effectiveSlop'] as int;
     final int maxExpansions = params['maxExpansions'] as int;
 
     // הרחבת שאילתה אוטומטית לפי שורש (lemma) דרך AI sidecar.
     // חיפוש "הלך" ימצא גם "הולך", "ילך", "הליכה" וכו'.
-    // בכישלון - חיפוש רגיל בלי AI.
     if (AiProvider.instance.isReady && !fuzzy && !hasAlternativeWords) {
       try {
         final expander = SmartQueryExpander(AiProvider.instance.service);
@@ -184,19 +174,20 @@ if ($content -notlike "*$expansionMarker*") {
       }
     }
 '@
-    if ($content.Contains($findBlock)) {
-        $content = $content.Replace($findBlock, $replaceBlock)
-        Write-Host "  ✓ הוספתי בלוק הרחבת AI" -ForegroundColor Green
+
+    if ($searchContent.Contains($regularSearchBlock)) {
+        $searchContent = $searchContent.Replace($regularSearchBlock, $regularSearchReplace)
+        Write-Host "→ search_repository.dart עם הרחבת AI" -ForegroundColor Green
     } else {
-        Write-Host "  ⚠ לא נמצאה השורה לאחריה להוסיף את בלוק ה-AI" -ForegroundColor Yellow
+        Write-Host "  ⚠ לא נמצא ה-block של regexTerms הראשון" -ForegroundColor Yellow
     }
 
-    [System.IO.File]::WriteAllText($searchDart, $content, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($searchDart, $searchContent, [System.Text.UTF8Encoding]::new($false))
 } else {
-    Write-Host "  • search_repository.dart כבר עם AI" -ForegroundColor DarkGray
+    Write-Host "→ search_repository.dart כבר עם AI" -ForegroundColor DarkGray
 }
 
 Write-Host ""
 Write-Host "════════════════════════════════════════════════" -ForegroundColor Green
-Write-Host "  אינטגרציה הושלמה" -ForegroundColor Green
+Write-Host "  אינטגרציה הושלמה (migrationDB_V2)" -ForegroundColor Green
 Write-Host "════════════════════════════════════════════════" -ForegroundColor Green
