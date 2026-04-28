@@ -36,9 +36,25 @@ jobs:
 
       - name: Apply AI integration patch
         shell: pwsh
+        working-directory: otzaria-ai
         run: |
-          Copy-Item -Recurse -Force otzaria-ai/integration/lib/* otzaria/lib/
-          # patches בתיקיית integration/patches/ מוחלים אם יש
+          $otzariaPath = Resolve-Path "..\otzaria"
+          .\integration\apply_integration.ps1 -OtzariaPath $otzariaPath.Path
+
+      - name: Fix Otzaria pubspec dependency conflicts
+        shell: pwsh
+        working-directory: otzaria
+        run: |
+          # אוצריא pinned ל-isar 4.0.0-dev שדורש analyzer<7, אבל Flutter החדש דורש analyzer>=8
+          # ו-test 1.25 לא תואם ל-flutter_test
+          $pubspec = Get-Content "pubspec.yaml" -Raw -Encoding UTF8
+          if ($pubspec -match "^\s*test:\s*\^1\.25") {
+            $pubspec = $pubspec -replace "^(\s*)test:\s*\^1\.25\.\d+", "# `$&  # disabled by AI build (incompat with isar)"
+          }
+          if ($pubspec -notmatch "analyzer:\s*\^8") {
+            $pubspec = $pubspec -replace "(dependency_overrides:[^\n]*\n(?:[^\n]*\n)*?\s*intl:[^\n]*)", "`$1`n  analyzer: ^8.0.0`n  test_api: ^0.7.10"
+          }
+          Set-Content -Path "pubspec.yaml" -Value $pubspec -Encoding UTF8 -NoNewline
 
       - name: Setup Python 3.12
         uses: actions/setup-python@v5
@@ -50,6 +66,7 @@ jobs:
         with:
           channel: 'stable'
           cache: true
+          flutter-version: '3.41.5'
 
       - name: Install Inno Setup
         shell: pwsh
