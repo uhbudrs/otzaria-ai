@@ -1,4 +1,4 @@
-# החלת אינטגרציית AI על מקור אוצריא (migrationDB_V2 / 0.9.90+).
+﻿# החלת אינטגרציית AI על מקור אוצריא (migrationDB_V2 / 0.9.90+).
 #
 # שינויים בענף החדש:
 #   - more_screen.dart הוחלף ב-tools/tools_screen.dart עם ToolDescriptor registry
@@ -145,39 +145,45 @@ if ($searchContent -notlike "*AI-expanded regexTerms*") {
         )
     }
 
-    # 4b. הסרת final מ-regexTerms הראשון בלבד
-    # נשתמש ב-Regex עם match-once: -replace עם count parameter לא קיים ב-PowerShell,
-    # אבל .Replace() של string מחליף הכל. נקרא להסרה מאת הראשון.
-    # פתרון: מוסיפים marker לבלוק שאנחנו עורכים, ומחליפים בהקשר ספציפי.
-    $regularSearchBlock = @"
-    final List<String> regexTerms = params['regexTerms'] as List<String>;
-    final int effectiveSlop = params['effectiveSlop'] as int;
-    final int maxExpansions = params['maxExpansions'] as int;
-"@
+    # 4b. הסרת final + הוספת בלוק AI.
+    # שני ה-heredocs single-quoted (@'...'@) - PS לא יבצע interpolation על $regexTerms וכו.
+    # ב-Dart מותר לכתוב strings עם ' או " - שני הסגנונות מקובלים.
+    $regularSearchBlock = @'
+    final List<String> regexTerms = params["regexTerms"] as List<String>;
+    final int effectiveSlop = params["effectiveSlop"] as int;
+    final int maxExpansions = params["maxExpansions"] as int;
+'@
     $regularSearchReplace = @'
-    List<String> regexTerms = params['regexTerms'] as List<String>;
-    final int effectiveSlop = params['effectiveSlop'] as int;
-    final int maxExpansions = params['maxExpansions'] as int;
+    List<String> regexTerms = params["regexTerms"] as List<String>;
+    final int effectiveSlop = params["effectiveSlop"] as int;
+    final int maxExpansions = params["maxExpansions"] as int;
 
-    // הרחבת שאילתה אוטומטית לפי שורש (lemma) דרך AI sidecar.
-    // חיפוש "הלך" ימצא גם "הולך", "ילך", "הליכה" וכו'.
+    // Smart query expansion via AI sidecar (DictaBERT lemma).
+    // Searching halach will also find holech, yelech, halicha etc.
     if (AiProvider.instance.isReady && !fuzzy && !hasAlternativeWords) {
       try {
         final expander = SmartQueryExpander(AiProvider.instance.service);
         final expanded = await expander.expand(query);
         if (expanded.regexTerms.isNotEmpty) {
           regexTerms = expanded.regexTerms;
-          debugPrint('AI-expanded regexTerms: $regexTerms');
+          debugPrint("AI-expanded regexTerms: $regexTerms");
         }
       } catch (e) {
-        debugPrint('AI expansion failed (using basic search): $e');
+        debugPrint("AI expansion failed (using basic search): $e");
       }
     }
 '@
+    # אבל ה-block המקורי בקובץ דווקא יש לו ' (singlequote)! נחליף ב-block אם נמצא:
+    # מנסה גם אם הקובץ באמת עם '
+    $regularSearchBlockSingleQ = "    final List<String> regexTerms = params['regexTerms'] as List<String>;`r`n    final int effectiveSlop = params['effectiveSlop'] as int;`r`n    final int maxExpansions = params['maxExpansions'] as int;"
 
-    if ($searchContent.Contains($regularSearchBlock)) {
+    # נסה גם " וגם ' לבלוק המקורי
+    if ($searchContent.Contains($regularSearchBlockSingleQ)) {
+        $searchContent = $searchContent.Replace($regularSearchBlockSingleQ, $regularSearchReplace)
+        Write-Host "→ search_repository.dart עם הרחבת AI (single quotes)" -ForegroundColor Green
+    } elseif ($searchContent.Contains($regularSearchBlock)) {
         $searchContent = $searchContent.Replace($regularSearchBlock, $regularSearchReplace)
-        Write-Host "→ search_repository.dart עם הרחבת AI" -ForegroundColor Green
+        Write-Host "→ search_repository.dart עם הרחבת AI (double quotes)" -ForegroundColor Green
     } else {
         Write-Host "  ⚠ לא נמצא ה-block של regexTerms הראשון" -ForegroundColor Yellow
     }
