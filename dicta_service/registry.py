@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 import torch
 
-from .config import CFG
+from dicta_service.config import CFG
 
 log = logging.getLogger("registry")
 

@@ -11,7 +11,7 @@ from typing import Any
 
 import torch
 
-from ..registry import REGISTRY
+from dicta_service.registry import REGISTRY
 
 log = logging.getLogger("tools.morph")
 

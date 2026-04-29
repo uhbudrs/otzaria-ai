@@ -19,8 +19,8 @@ torch_stub.nn = types.SimpleNamespace(
 )
 sys.modules["torch"] = torch_stub
 
-from . import __version__  # noqa: E402
-from .config import HOST, PORT, PROFILE, ALLOW_CLOUD  # noqa: E402
+from dicta_service import __version__  # noqa: E402
+from dicta_service.config import HOST, PORT, PROFILE, ALLOW_CLOUD  # noqa: E402
 
 from fastapi import FastAPI  # noqa: E402
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import requests
 
-from ..config import DICTA_CLOUD, ALLOW_CLOUD
+from dicta_service.config import DICTA_CLOUD, ALLOW_CLOUD
 
 log = logging.getLogger("tools.translate")
 

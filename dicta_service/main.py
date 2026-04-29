@@ -21,17 +21,19 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import __version__
-from .config import CFG, HOST, PORT, PROFILE, ALLOW_CLOUD
-from .registry import REGISTRY
-from .loaders import register_all
-from .tools import embed as embed_tool
-from .tools import morph as morph_tool
-from .tools import ner as ner_tool
-from .tools import qa as qa_tool
-from .tools import citation as citation_tool
-from .tools import nakdan as nakdan_tool
-from .tools import translate as translate_tool
+# Absolute imports - PyInstaller doesn't support relative imports when running as standalone exe.
+# בריצה רגילה (python -m dicta_service.main) absolute imports עובדים גם.
+from dicta_service import __version__
+from dicta_service.config import CFG, HOST, PORT, PROFILE, ALLOW_CLOUD
+from dicta_service.registry import REGISTRY
+from dicta_service.loaders import register_all
+from dicta_service.tools import embed as embed_tool
+from dicta_service.tools import morph as morph_tool
+from dicta_service.tools import ner as ner_tool
+from dicta_service.tools import qa as qa_tool
+from dicta_service.tools import citation as citation_tool
+from dicta_service.tools import nakdan as nakdan_tool
+from dicta_service.tools import translate as translate_tool
 
 logging.basicConfig(
     level=logging.INFO,

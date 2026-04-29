@@ -2,7 +2,7 @@
 from __future__ import annotations
 import torch
 
-from ..registry import REGISTRY
+from dicta_service.registry import REGISTRY
 
 
 @torch.inference_mode()

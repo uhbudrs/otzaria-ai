@@ -12,9 +12,9 @@ from pathlib import Path
 
 import numpy as np
 
-from ..config import DATA_DIR, CFG
-from ..registry import REGISTRY
-from . import embed
+from dicta_service.config import DATA_DIR, CFG
+from dicta_service.registry import REGISTRY
+from dicta_service.tools import embed
 
 log = logging.getLogger("tools.citation")
 

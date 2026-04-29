@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 
-from .config import CFG, MODELS_DIR
+from dicta_service.config import CFG, MODELS_DIR
 
 log = logging.getLogger("loaders")
 os.environ.setdefault("HF_HOME", str(MODELS_DIR))
