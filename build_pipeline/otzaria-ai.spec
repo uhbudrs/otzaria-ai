@@ -57,10 +57,29 @@ EXCLUDES = [
     "jax", "jaxlib", "flax",
     "sklearn", "scikit-learn",
     "pandas", "scipy",
-    # GPU support - חשוב: לא להחריג torch.cuda ו-torch.distributed!
-    # torch core מייבא את torch.cuda גם ב-CPU כדי לבדוק זמינות.
-    # ניתן להחריג רק את החבילות שלא בליבה: torchvision, torchaudio.
+    # GPU support - excludes חכמים:
+    # - לא להחריג torch.cuda ולא torch.distributed (ליבה - קריטי לimport)
+    # - אפשר להחריג submodules שלא בשימוש ע"י תפיסה ספציפית
     "torchvision", "torchaudio",
+    # excludes ספציפיים שלא נטעמים אוטומטית עם torch:
+    "torch.distributed.fsdp",
+    "torch.distributed.tensor",
+    "torch.distributed.checkpoint",
+    "torch.distributed.elastic",
+    "torch.distributed.pipelining",
+    "torch.distributed.rpc",
+    "torch.testing._internal",
+    "torch._inductor",
+    "torch._dynamo",
+    "torch.utils.tensorboard",
+    "torch.utils.bottleneck",
+    "torch.profiler",
+    "torch.jit._state",
+    "torch.onnx",
+    "torch.fx",
+    "torch.export",
+    "torch.compiler",
+    "torch.distributions",  # 100+ classes שלא בשימוש
     # UI
     "matplotlib", "PIL", "PyQt5", "PyQt6", "PySide2", "PySide6",
     "tkinter", "_tkinter",
