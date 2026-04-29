@@ -73,15 +73,11 @@ Source: "..\dist\otzaria-ai\*"; DestDir: "{app}\ai"; \
 ; ── סקריפט הורדת מודלים (לטסק האופציונלית) ───────────────────────
 Source: "download_models_post_install.ps1"; DestDir: "{app}\ai"; Flags: ignoreversion
 
-; ── סקריפט הסרת התקנה ───────────────────────────────────────────
-Source: "..\..\otzaria\installer\uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion
+; ── סקריפט הסרת התקנה - הוסר ב-V2 (לא קיים יותר) ─────────────────
+; Source: "..\..\otzaria\installer\uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
-; הסר MSIX קודם של אוצריא אם קיים
-Filename: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"; \
-    WorkingDir: "{app}"; \
-    Parameters: " -sta -WindowStyle Hidden -noprofile -executionpolicy bypass -file uninstall_msix.ps1"; \
-    Flags: runhidden
+; הסרת MSIX הוסרה ב-V2 (uninstall_msix.ps1 לא קיים יותר)
 
 ; הורדת מודלים אם המשתמש בחר
 Filename: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"; \
