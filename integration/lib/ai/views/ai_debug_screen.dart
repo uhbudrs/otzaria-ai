@@ -21,7 +21,7 @@ class _AiDebugScreenState extends State<AiDebugScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 9, vsync: this);
+    _tabs = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -49,7 +49,6 @@ class _AiDebugScreenState extends State<AiDebugScreen>
               Tab(text: 'הרחבת חיפוש'),
               Tab(text: 'NER'),
               Tab(text: 'ציטוטים'),
-              Tab(text: 'תרגום'),
             ],
           ),
         ),
@@ -98,11 +97,6 @@ class _AiDebugScreenState extends State<AiDebugScreen>
                     .join('\n\n');
               },
               hint: 'פסקה רבנית - נחפש ציטוטים מקראיים',
-            ),
-            _SimpleTextTab(
-              ai: widget.ai,
-              run: (text) async => widget.ai.translate(text),
-              hint: 'טקסט עברי לתרגום לאנגלית',
             ),
           ],
         ),
