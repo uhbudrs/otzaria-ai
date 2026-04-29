@@ -114,6 +114,42 @@ jobs:
             exit 1
           }
 
+      - name: Download Dicta models for bundling
+        shell: pwsh
+        working-directory: otzaria-ai
+        run: |
+          $tinyDir = "dist\bundled_models\dicta-il--dictabert-tiny"
+          $jointDir = "dist\bundled_models\dicta-il--dictabert-tiny-joint"
+          New-Item -ItemType Directory -Force -Path $tinyDir, $jointDir | Out-Null
+
+          $tinyFiles = @("config.json", "tokenizer.json", "tokenizer_config.json",
+                         "vocab.txt", "special_tokens_map.json", "model.safetensors")
+          foreach ($f in $tinyFiles) {
+            $url = "https://huggingface.co/dicta-il/dictabert-tiny/resolve/main/$f"
+            Write-Host "↓ tiny/$f"
+            Invoke-WebRequest -Uri $url -OutFile (Join-Path $tinyDir $f) -UseBasicParsing
+          }
+
+          foreach ($f in $tinyFiles) {
+            $url = "https://huggingface.co/dicta-il/dictabert-tiny-joint/resolve/main/$f"
+            Write-Host "↓ tiny-joint/$f"
+            Invoke-WebRequest -Uri $url -OutFile (Join-Path $jointDir $f) -UseBasicParsing
+          }
+
+          # קבצי Python של joint (מrepo dictabert-joint, לא tiny-joint)
+          $pyFiles = @("BertForJointParsing.py", "BertForMorphTagging.py",
+                       "BertForPrefixMarking.py", "BertForSyntaxParsing.py")
+          foreach ($f in $pyFiles) {
+            $url = "https://huggingface.co/dicta-il/dictabert-joint/resolve/main/$f"
+            Write-Host "↓ tiny-joint/$f (from dictabert-joint)"
+            Invoke-WebRequest -Uri $url -OutFile (Join-Path $jointDir $f) -UseBasicParsing
+          }
+
+          Write-Host ""
+          Write-Host "=== bundled models size ==="
+          Get-ChildItem dist\bundled_models -Recurse -File | Measure-Object Length -Sum |
+              ForEach-Object { "{0:N1} MB" -f ($_.Sum / 1MB) }
+
       - name: Build Flutter Windows release
         shell: pwsh
         working-directory: otzaria

@@ -50,7 +50,8 @@ Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "downloadmodels"; Description: "הורד את מודלי דיקטה כעת (כ-400MB, דורש אינטרנט)"; GroupDescription: "כלי AI:"; Flags: checkedonce
+; המודלים מוטמעים ב-installer, ההורדה היא רק fallback למקרה שזה נמחק
+Name: "downloadmodels"; Description: "הורד מודלים שוב מ-HuggingFace (לא נחוץ ברוב המקרים)"; GroupDescription: "כלי AI:"; Flags: unchecked
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\default.isar"
@@ -70,23 +71,37 @@ Source: "..\..\otzaria\build\windows\x64\runner\Release\*"; \
 Source: "..\dist\otzaria-ai\*"; DestDir: "{app}\ai"; \
     Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
-; ── סקריפט הורדת מודלים (לטסק האופציונלית) ───────────────────────
+; ── מודלים מודבקים (yרידו בעת ה-build) - ~360MB ─────────────────
+Source: "..\dist\bundled_models\*"; DestDir: "{app}\bundled_models"; \
+    Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+
+; ── סקריפט הורדת מודלים (fallback אם המודלים המוטמעים נמחקו) ────
 Source: "download_models_post_install.ps1"; DestDir: "{app}\ai"; Flags: ignoreversion
+
+; ── סקריפט להעתקת המודלים המוטמעים ל-LOCALAPPDATA של המשתמש ─────
+Source: "install_bundled_models.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 ; ── סקריפט הסרת התקנה - הוסר ב-V2 (לא קיים יותר) ─────────────────
 ; Source: "..\..\otzaria\installer\uninstall_msix.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
-; הסרת MSIX הוסרה ב-V2 (uninstall_msix.ps1 לא קיים יותר)
+; העתקת המודלים המוטמעים ל-LOCALAPPDATA של המשתמש המתקין.
+; runasoriginaluser מבטיח ש-$env:LOCALAPPDATA יתפרש כתיקיית המשתמש,
+; לא של ה-admin שמריץ את ההתקנה.
+Filename: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"; \
+    WorkingDir: "{app}"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File install_bundled_models.ps1"; \
+    StatusMsg: "מתקין מודלי דיקטה (~360MB)..."; \
+    Flags: runhidden runasoriginaluser
 
-; הורדת מודלים אם המשתמש בחר
+; הורדת מודלים מהאינטרנט - רק אם המשתמש סימן (fallback אם המוטמעים נכשלו)
 Filename: "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"; \
     WorkingDir: "{app}\ai"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File download_models_post_install.ps1"; \
-    Description: "הורדת מודלי דיקטה"; \
-    StatusMsg: "מוריד את מודלי ה-AI מ-HuggingFace ({code:GetModelsSize}MB)..."; \
+    Description: "הורד מודלים מ-HuggingFace (אם החריגה ב-NetFree)"; \
+    StatusMsg: "מוריד מודלים מ-HuggingFace..."; \
     Tasks: downloadmodels; \
-    Flags: postinstall
+    Flags: postinstall runasoriginaluser
 
 ; הפעלת אוצריא בסוף
 Filename: "{app}\{#MyAppExeName}"; \
