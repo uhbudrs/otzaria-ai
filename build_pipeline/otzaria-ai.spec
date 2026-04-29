@@ -57,9 +57,9 @@ EXCLUDES = [
     "jax", "jaxlib", "flax",
     "sklearn", "scikit-learn",
     "pandas", "scipy",
-    # GPU support
-    "torch.cuda", "torch.distributed.fsdp",
-    "torch.distributions",
+    # GPU support - חשוב: לא להחריג torch.cuda ו-torch.distributed!
+    # torch core מייבא את torch.cuda גם ב-CPU כדי לבדוק זמינות.
+    # ניתן להחריג רק את החבילות שלא בליבה: torchvision, torchaudio.
     "torchvision", "torchaudio",
     # UI
     "matplotlib", "PIL", "PyQt5", "PyQt6", "PySide2", "PySide6",
