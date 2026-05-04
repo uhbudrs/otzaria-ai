@@ -94,8 +94,8 @@ EXCLUDES = [
     "transformers.models.gpt2",
     "transformers.models.llama",
     "transformers.models.mistral",
-    # Tests
-    "pytest", "unittest",
+    # Tests - אסור להוציא unittest (stdlib, torch מייבא אותו!)
+    "pytest",
 ]
 
 # רק ה-models של transformers שאנחנו צריכים בפועל
